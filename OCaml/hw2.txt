@@ -1,0 +1,65 @@
+=====================================================================
+IMPLEMENTATION
+=====================================================================
+
+make_matcher takes in the grammar, splits it into the start symbol and 
+grammar rules function, then returns a function that takes in an acceptor 
+and fragment. This function uses call_accept_on_frag to go through the rules
+of the grammar one by one, then calls a helper function check_frag_match. 
+on each rule.
+
+check_frag_match first checks that the individual rule and the fragment are 
+not empty. Next, if the rule's start symbol is a non-terminal, we recurse by
+calling call_accept_on_frag and passing in the result of check_frag_match 
+called on the remaining rules. On the other hand, if the rule's start symbol 
+is a terminal, we simply check if the terminal symbol matches the fragment
+head, recurses if yes and drops the case if not. 
+
+If check_frag_match returns None, call_accept_on_frag recurses and moves to 
+the next rule. Otherwise, this means check_frag_match found a match and we
+can simply return that result. 
+
+Unfortunately, I couldn't figure out how to write make_parser. My train of 
+thought was to use make_matcher and accept_empty_suffix to first check if the
+fragment could be parsed in entirety. Then, I would've structured make_parser
+similarly by iterating through the rules and fragment in a depth first search.
+By depth first search, I mean I would first find rules that match the fragment
+terminals (leaves) and try to nest these within more rules (nodes). I would 
+also use parse_tree_leaves to do a final check. 
+
+=====================================================================
+WEAKNESSES
+=====================================================================
+
+When I was writing a test case for make_matcher, I ran into some confusion 
+with grammars resulting in stack overflow during evaluation. This turned out 
+to be due to looping recursion. This is the primary weakness I observed in 
+the code-- the code is unable to handle grammars that would result in infinite
+recursion. 
+
+For example, if we have a grammar like so:
+
+type awksub_nonterminals =
+  | Expr | Num
+
+let awkish_grammar =
+  (Expr,
+   function
+     | Expr ->
+         [[N Expr; N Num]]
+     | Num ->
+   [[T"0"]; [T"1"]; [T"2"]; [T"3"]; [T"4"];
+    [T"5"]; [T"6"]; [T"7"]; [T"8"]; [T"9"]])
+
+And ran this test:
+
+let test =
+  ((make_matcher awkish_grammar accept_all ["1"; "2"])
+   = Some [])
+
+This would result in infinite recursion, because the code would see that the 
+first nonterminal is Expr, and would try Expr again and continuously repeat
+itself. 
+
+Essentially, this code fails for any grammar with a nonterminal symbol that
+contains itself in one of its rules. 
